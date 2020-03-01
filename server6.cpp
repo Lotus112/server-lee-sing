@@ -126,8 +126,11 @@ void Service::process_request()
     {
         // Resource not found.
         status_code = 404;
-        return;
+        url = std::string("error.html");
+        
     }
+
+    resource_file_path = std::string("/home/cyber/http/") + url;
 
     std::ifstream resource_fstream(resource_file_path,std::ifstream::binary);
     if (!resource_fstream.is_open()) 

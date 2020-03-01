@@ -11,17 +11,17 @@ using namespace std;
 
 
 class Service {
-    static const std::map<unsigned int,string> http_status_table;
+    static const std::map<unsigned int,string> http_table;
 
     public: 
         Service(std::shared_ptr<boost::asio::ip::tcp::socket> sock) :
-            m_sock(sock),
-            m_request(4096),
+            client_sock(sock),
+            request(4096),
             m_response_status_code(200),
             m_resource_size_bytes(0)
         {};
         void start_handling() {
-            asio::async_read_until(*m_sock.get(), m_request,"\r\n",[this]( const boost::system::error_code& ec, size_t bytes_transferred)
+            asio::async_read_until(*client_sock.get(), request,"\r\n",[this]( const boost::system::error_code& ec, size_t bytes_transferred)
             {
                 on_request_line_received(ec, bytes_transferred);
             });
@@ -50,7 +50,7 @@ class Service {
 
             // Parse the request line.
             std::string request_line;
-            std::istream request_stream(&m_request);
+            std::istream request_stream(&request);
             std::getline(request_stream, request_line, '\r');
             // Remove symbol '\n' from the buffer.
             request_stream.get();
@@ -60,12 +60,12 @@ class Service {
             std::istringstream request_line_stream(request_line);
             request_line_stream >> request_method;
 
-            /*if (request_method.compare("GET") || request_method.compare("POST") != 0) {
+            if (request_method.compare("GET") != 0) {
                 // Unsupported method.
                 m_response_status_code = 501;
                 send_response();
                 return;
-            }*/
+            }
             
 
 
@@ -83,7 +83,7 @@ class Service {
 
             // At this point the request line is successfully
             // received and parsed. Now read the request headers.
-            asio::async_read_until(*m_sock.get(),m_request,"\r\n\r\n", [this]( const boost::system::error_code& ec, size_t bytes_transferred)
+            asio::async_read_until(*client_sock.get(),request,"\r\n\r\n", [this]( const boost::system::error_code& ec, size_t bytes_transferred)
             {
                 on_headers_received(ec, bytes_transferred);
             });
@@ -110,7 +110,7 @@ class Service {
                 }
             }
             // Parse and store headers.
-            std::istream request_stream(&m_request);
+            std::istream request_stream(&request);
             string header_name, header_value;
 
             while (!request_stream.eof()) {
@@ -131,7 +131,14 @@ class Service {
         void process_request() {
             // Read file.
 
-            std::string resource_file_path = std::string("/home/cyber/") + m_requested_resource;
+            std::string resource_file_path = std::string("/home/cyber/http/") + m_requested_resource;
+
+
+            if(resource_file_path == "/home/cyber/http/")
+            {
+                resource_file_path = std::string("/home/cyber/http/home.html");
+            }
+
             if (!boost::filesystem::exists(resource_file_path)) {
                 // Resource not found.
                 m_response_status_code = 404;
@@ -158,9 +165,9 @@ class Service {
 
         void send_response() 
         {
-            m_sock->shutdown(asio::ip::tcp::socket::shutdown_receive);
+            client_sock->shutdown(asio::ip::tcp::socket::shutdown_receive);
 
-            auto status_line = http_status_table.at(m_response_status_code);
+            auto status_line = http_table.at(m_response_status_code);
             m_response_status_line = std::string("HTTP/1.1 ") + status_line + "\r\n";
             m_response_headers += "\r\n";
             std::vector<asio::const_buffer> response_buffers;
@@ -174,7 +181,7 @@ class Service {
             }
             
             // Initiate asynchronous write operation.
-            asio::async_write(*m_sock.get(), response_buffers, [this] (
+            asio::async_write(*client_sock.get(), response_buffers, [this] (
                 const boost::system::error_code& ec,
                 std::size_t bytes_transferred)
             {
@@ -187,7 +194,7 @@ class Service {
             if (ec) {
                 std::cout << * "Error occured Error code = " << ec.value () << ". Message : " << ec.message () ;
             }
-            m_sock->shutdown(asio::ip::tcp::socket::shutdown_both);
+            client_sock->shutdown(asio::ip::tcp::socket::shutdown_both);
             on_finish () ;   
         }
 
@@ -197,8 +204,8 @@ class Service {
         }
     
     private:
-        std::shared_ptr<boost::asio::ip::tcp::socket> m_sock;
-        boost::asio::streambuf m_request;
+        std::shared_ptr<boost::asio::ip::tcp::socket> client_sock;
+        boost::asio::streambuf request;
         std::map<string, string> m_request_headers;
         string m_requested_resource;
 
@@ -210,7 +217,7 @@ class Service {
     };
 
     const std::map<unsigned int, string>
-        Service::http_status_table =
+        Service::http_table =
     {
         { 200, "200 OK" },
         { 404, "404 Not Found" },

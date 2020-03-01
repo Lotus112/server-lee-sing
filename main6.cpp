@@ -5,7 +5,7 @@ const unsigned int Default_thread_pool_size = 2;
 
 int main()
 {
-    unsigned short port_num = 1333;
+    unsigned short port = 1333;
 
     try {
         Server srv;
@@ -17,7 +17,7 @@ int main()
             thread_pool_size = Default_thread_pool_size;
         }
 
-        srv.Start(port_num, thread_pool_size);
+        srv.Start(port, thread_pool_size);
 
         //std::this_thread::sleep_for(std::chrono::seconds(60));
         while(true)

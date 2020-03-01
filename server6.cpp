@@ -143,13 +143,15 @@ void Service::process_request()
 
     // Find out file size.
     resource_fstream.seekg(0, std::ifstream::end);
-    resource_size_bytes = static_cast<size_t>(resource_fstream.tellg());
-    m_resource_buffer.reset(new char[resource_size_bytes]);
+    resource_contents_size = static_cast<size_t>(resource_fstream.tellg());
+    m_resource_buffer.reset(new char[resource_contents_size]);
 
     resource_fstream.seekg(std::ifstream::beg);
-    resource_fstream.read(m_resource_buffer.get(),resource_size_bytes);
-    m_response_headers += string("content-length") + ": " + to_string(resource_size_bytes) + "\r\n";
+    resource_fstream.read(m_resource_buffer.get(),resource_contents_size);
+    m_response_headers += string("content-length") + ": " + to_string(resource_contents_size) + "\r\n";
 }
+
+//TALK ABOUT RAI
 
 void Service::send_response() 
 {
@@ -165,9 +167,9 @@ void Service::send_response()
     {
         response_buffers.push_back(asio::buffer(m_response_headers));
     }
-    if (resource_size_bytes > 0) 
+    if (resource_contents_size > 0) 
     {
-        response_buffers.push_back(asio::buffer(m_resource_buffer.get(), resource_size_bytes));
+        response_buffers.push_back(asio::buffer(m_resource_buffer.get(), resource_contents_size));
     }
             
     // Initiate asynchronous write operation.
@@ -196,16 +198,16 @@ void Service::on_finish()
 
 //// ACCEPTOR private bits /////
 
-void Acceptor::InitAccept()
+void Acceptor::Conn_Accept()
 {
-    std::shared_ptr<asio::ip::tcp::socket> sock(new asio::ip::tcp::socket(m_ios));
-    m_acceptor.async_accept(*sock.get(), [this, sock] (const boost::system::error_code& error)
+    std::shared_ptr<asio::ip::tcp::socket> client(new asio::ip::tcp::socket(ioc));
+    m_acceptor.async_accept(*client.get(), [this, client] (const boost::system::error_code& error)
     {
-        OnAccept(error, sock);
+        On_Accept(error, client);
     });
 }
 
-void Acceptor::OnAccept(const boost::system::error_code&ec, std::shared_ptr<asio::ip::tcp::socket> sock)
+void Acceptor::On_Accept(const boost::system::error_code&ec, std::shared_ptr<asio::ip::tcp::socket> client)
 {
     if (ec)
     {   
@@ -213,12 +215,12 @@ void Acceptor::OnAccept(const boost::system::error_code&ec, std::shared_ptr<asio
     }
     else 
     {
-        (new Service(sock))->start_handling();
+        (new Service(client))->client_handle();
     }
 
-    if (!m_isStopped.load()) 
+    if (!is_Stopped.load()) 
     {
-        InitAccept();
+        Conn_Accept();
     }
     else 
     {

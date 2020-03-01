@@ -1,6 +1,5 @@
 #include <boost/asio.hpp> 
 #include <boost/filesystem.hpp>
-#include <boost/system/error_code.hpp>
 #include <fstream>
 #include <atomic>
 #include <thread>
@@ -52,7 +51,7 @@ class Service {
             // Parse the request line.
             string request_line;
             std::istream request_stream(&m_request);
-            getline(request_stream, request_line, '\r');
+            std::getline(request_stream, request_line, '\r');
             // Remove symbol '\n' from the buffer.
             request_stream.get();
 
@@ -62,24 +61,26 @@ class Service {
             request_line_stream >> request_method;
 
             // We only support GET method.
-            if (request_method.compare("GET") != 0) {
+            /*if (request_method.compare("GET") != 0) {
                 // Unsupported method.
                 m_response_status_code = 501;
                 send_response();
                 return;
-            }
+            }*/
+            
+
 
             request_line_stream >> m_requested_resource;
 
             string request_http_version;
             request_line_stream >> request_http_version;
 
-            if (request_http_version.compare("HTTP/1.1") != 0) {
+            /*if (request_http_version.compare("HTTP/1.1") != 0) {
                 // Unsupported HTTP version or bad request.
                 m_response_status_code = 505;
                 send_response();
                 return;
-            }
+            }*/
 
             // At this point the request line is successfully
             // received and parsed. Now read the request headers.
@@ -130,7 +131,7 @@ class Service {
 
         void process_request() {
             // Read file.
-            string resource_file_path = string("D:\\http_root") + m_requested_resource;
+            string resource_file_path = string("home/") + m_requested_resource;
             if (!boost::filesystem::exists(resource_file_path)) {
                 // Resource not found.
                 m_response_status_code = 404;
@@ -243,15 +244,108 @@ class Acceptor {
             std::shared_ptr<asio::ip::tcp::socket> sock(new asio::ip::tcp::socket(m_ios));
             m_acceptor.async_accept(*sock.get(), [this, sock] (const boost::system::error_code& error)
             {
-                onAccept(error, sock);
+                OnAccept(error, sock);
             });
         }
 
         void OnAccept(const boost::system::error_code&ec, std::shared_ptr<asio::ip::tcp::socket> sock)
         {
             if (ec)
+            {   
+                std::cout<<"Error occured! Error Code = " << ec.value() << ". Message: " << ec.message();
+            }
+            else {
+                (new Service(sock))->start_handling();
+            }
+
+            if (!m_isStopped.load()) 
             {
-                
+                InitAccept();
+            }
+            else {
+                m_acceptor.close();
             }
         }
-}     
+    
+    private:
+        asio::io_context&m_ios;
+        asio::ip::tcp::acceptor m_acceptor;
+        std::atomic<bool>m_isStopped;
+
+};
+
+class Server
+{
+    public:
+        Server() 
+        {
+            m_work.reset(new asio::io_context::work(m_ios));
+        }
+        //Start Server here
+        void Start(unsigned short port_num, unsigned int thread_pool_size)
+        {
+            assert(thread_pool_size > 0);
+            //Create/start Acceptor
+            acc.reset(new Acceptor(m_ios, port_num));
+            acc->Start();
+
+            //Specified number of threads and add to pool
+
+            for (unsigned int i = 0; i < thread_pool_size; i++)
+            {
+                std::unique_ptr<std::thread> th(new std::thread([this]()
+                {
+                    m_ios.run();
+                }));
+                m_thread_pool.push_back(std::move(th));
+            }
+        }
+
+        //stopping server
+        void Stop()
+        {
+            acc->Stop();
+            m_ios.stop();
+
+            for (auto& th : m_thread_pool)
+            {
+                th->join();
+            }
+        }
+
+        private:
+            asio::io_context m_ios;
+            std::unique_ptr<asio::io_context::work>m_work;
+            std::unique_ptr<Acceptor>acc;
+            std::vector<std::unique_ptr<std::thread>>m_thread_pool;
+};
+
+const unsigned int Default_thread_pool_size = 2;
+
+int main()
+{
+    unsigned short port_num = 1333;
+
+    try {
+        Server srv;
+
+        unsigned int thread_pool_size = std::thread::hardware_concurrency() * 2;
+
+        if(thread_pool_size == 0)
+        {
+            thread_pool_size = Default_thread_pool_size;
+        }
+
+        srv.Start(port_num, thread_pool_size);
+
+        std::this_thread::sleep_for(std::chrono::seconds(60));
+
+        srv.Stop();
+    }
+    catch (system::system_error&e)
+    {
+        std::cout << "Error Occured! Error Code: " << e.code() << ". Message: " << e.what();
+    }
+
+    return 0;
+}

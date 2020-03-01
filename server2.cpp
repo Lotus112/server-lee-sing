@@ -54,7 +54,7 @@ class Acceptor {
         }
 
         private:
-            asio::io_service&m_ios;
+            asio::io_context&m_ios;
             asio::ip::tcp::acceptor m_acceptor;
 
 };
@@ -85,12 +85,12 @@ class Server {
 
     std::unique_ptr<std::thread>m_thread;
     std::atomic<bool>m_stop;
-    asio::io_servicem_ios;
+    asio::io_context m_ios;
 };
 
 int main()
 {
-    unsigned short port_num = 3333;
+    unsigned short port_num = 1333;
 
     try {
         Server srv;

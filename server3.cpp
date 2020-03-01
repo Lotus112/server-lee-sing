@@ -61,12 +61,12 @@ class Service {
             request_line_stream >> request_method;
 
             // We only support GET method.
-            /*if (request_method.compare("GET") != 0) {
+            if (request_method.compare("GET") != 0) {
                 // Unsupported method.
                 m_response_status_code = 501;
                 send_response();
                 return;
-            }*/
+            }
             
 
 
@@ -75,12 +75,12 @@ class Service {
             string request_http_version;
             request_line_stream >> request_http_version;
 
-            /*if (request_http_version.compare("HTTP/1.1") != 0) {
+            if (request_http_version.compare("HTTP/1.1") != 0) {
                 // Unsupported HTTP version or bad request.
                 m_response_status_code = 505;
                 send_response();
                 return;
-            }*/
+            }
 
             // At this point the request line is successfully
             // received and parsed. Now read the request headers.
@@ -131,7 +131,8 @@ class Service {
 
         void process_request() {
             // Read file.
-            string resource_file_path = string("home/") + m_requested_resource;
+
+            string resource_file_path = string("home/cyber/") + m_requested_resource;
             if (!boost::filesystem::exists(resource_file_path)) {
                 // Resource not found.
                 m_response_status_code = 404;

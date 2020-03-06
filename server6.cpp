@@ -1,6 +1,6 @@
 #include "server6.hpp"
 
-void Service::on_request_line_received(const boost::system::error_code& ec, size_t bytes_transferred)
+void Service::http_request(const boost::system::error_code& ec, size_t bytes_transferred)
 {
     if (ec) 
     {
@@ -10,14 +10,14 @@ void Service::on_request_line_received(const boost::system::error_code& ec, size
              // No delimiter has been found in the
              // request message.
              status_code = 413;
-             send_response();
+             server_response_handle();
              return;
         }
         else 
         {
             // In case of any other error –
             // close the socket and clean up.
-            on_finish();
+            cleanup();
             return;
         }
     }
@@ -38,7 +38,7 @@ void Service::on_request_line_received(const boost::system::error_code& ec, size
     {
         // Unsupported method.
         status_code = 501;
-        send_response();
+        server_response_handle();
         return;
     }
             
@@ -53,7 +53,7 @@ void Service::on_request_line_received(const boost::system::error_code& ec, size
     {
         // Unsupported HTTP version or bad request.
             status_code = 505;
-            send_response();
+            server_response_handle();
             return;
     }
 
@@ -61,13 +61,13 @@ void Service::on_request_line_received(const boost::system::error_code& ec, size
     // received and parsed. Now read the request headers.
     asio::async_read_until(*client_sock.get(),request,"\r\n\r\n", [this]( const boost::system::error_code& ec, size_t bytes_transferred)
     {
-        on_headers_received(ec, bytes_transferred);
+        http_request_header(ec, bytes_transferred);
     });
 
     return;
 }
 
-void Service::on_headers_received(const boost::system::error_code& ec,size_t bytes_transferred)
+void Service::http_request_header(const boost::system::error_code& ec,std::size_t bytes_transferred)
 {
     if (ec) 
     {
@@ -77,20 +77,20 @@ void Service::on_headers_received(const boost::system::error_code& ec,size_t byt
             // No delimiter has been found in the
             // request message.
             status_code = 413; 
-            send_response();
+            server_response_handle();
             return;
         }
         else 
         {
             // In case of any other error - close the
             // socket and clean up.
-            on_finish();
+            cleanup();
             return;
         }
     }
     // Parse and store headers.
     std::istream request_stream(&request);
-    string header_name, header_value;
+    std::string header_name, header_value;
 
     while (!request_stream.eof()) 
     {
@@ -103,15 +103,15 @@ void Service::on_headers_received(const boost::system::error_code& ec,size_t byt
             m_request_headers[header_name] = header_value;
         }
     }
-    // Now we have all we need to process the request.
-    process_request();
-    send_response();
+    // Handle clients request
+    http_request_handle();
+    // Handle the servers response 
+    server_response_handle();
     return;
 }
 
-void Service::process_request() 
+void Service::http_request_handle() 
 {
-    // Read file.
 
     if(url.compare("/") == 0)
     {
@@ -153,7 +153,7 @@ void Service::process_request()
 
 //TALK ABOUT RAI
 
-void Service::send_response() 
+void Service::server_response_handle() 
 {
     client_sock->shutdown(asio::ip::tcp::socket::shutdown_receive);
 
@@ -175,21 +175,21 @@ void Service::send_response()
     // Initiate asynchronous write operation.
     asio::async_write(*client_sock.get(), response_buffers, [this] (const boost::system::error_code& ec, std::size_t bytes_transferred)
     {
-        on_response_sent(ec, bytes_transferred);
+        response_sent(ec, bytes_transferred);
     });
 }
 
-void Service::on_response_sent(const boost::system::error_code& ec, std::size_t bytes_transferred) 
+void Service::response_sent(const boost::system::error_code& ec, std::size_t bytes_transferred) 
 {
     if (ec) 
     {
         std::cout << * "Error occured Error code = " << ec.value () << ". Message : " << ec.message () ;
     }
     client_sock->shutdown(asio::ip::tcp::socket::shutdown_both);
-    on_finish () ;   
+    cleanup () ;   
 }
 
-void Service::on_finish()
+void Service::cleanup()
 {
     delete this;
 }
